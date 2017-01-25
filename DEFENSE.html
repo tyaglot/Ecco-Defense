@@ -1,0 +1,667 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!-- saved from url=(0051)http://cims.nyu.edu/drecco/games/Defense/launch.php -->
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Dr Ecco</title>
+
+<link rel="stylesheet" type="text/css" href="./Dr Ecco_files/style.css" media="screen">
+<style type="text/css">
+:root #content > #right > .dose > .dosesingle,
+:root #content > #center > .dose > .dosesingle,
+:root #header + #content > #left > #rlblock_left
+{ display: none !important; }</style></head>
+<body>
+<div class="post">
+    <h1 class="title">Defense</h1>
+</div>
+<div>
+    <div class="instr">
+        <p>
+        <b>Instructions:</b> <br>
+        Tower Defense is a single player game where the objective is to prevent waves of creeps from moving across the field. <br>
+        To accomplish this, walls can be built to route them and towers to shoot them.<br>
+        Creeps cannot move through your buildings but you can't box them in. <br>
+        Towers always shoot at the closest creep <br>
+        Your score is the number of creeps killed before 10 make it past your defenses. Spend gold to build, earn more by killing creeps.
+        </p>
+    </div>
+    <div class="instr">
+        <b>Rules of the game:</b>
+        <ul>
+            <li><span style="color:red"> Rule #1: </span>Start with 500 gold and 10 lives.</li>
+            <li><span style="color:red"> Rule #2: </span>Each kill earns 5 gold.</li>
+            <li><span style="color:red"> Rule #3: </span>There must be an open path from source to exit.</li>
+            <li><span style="color:red"> Rule #4: </span>Boxing in or building on a creep causes you to lose a life.</li>
+            <li><span style="color:red"> Rule #5: </span>Towers can stack, as many as you'd like per square.</li>
+            <li>Point defenses are single target, high damage structures.</li>
+        	<li>Mortars fire shells that deal moderate damage in an area around their target.</li>
+        	<li>Freeze towers chill creeps in an area around themselves. They deal no damage but halve movement speed in their area of effect. </li>
+        </ul>
+    </div>
+    <div>
+        <b>The object of the game is to last as long as possible</b>. The winner is the player with the highest score.
+    </div>
+</div>
+
+
+
+
+<style>
+	body {
+    background-color: #f5f8fa;
+}
+
+#main {
+    width: 800px;
+    margin-left: auto ;
+    margin-right: auto ;
+}
+
+#left-pane {
+    float: left;
+}
+
+#right-pane {
+    float: left;
+    padding-left: 5px;
+}
+
+#canvas {
+    border:1px solid #c3c3c3;
+}
+
+#right-pane div {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    padding-right: 5px;
+    padding-left: 5px;
+}
+
+#stats {
+    border:1px solid #c3c3c3;
+}
+#control {
+    border:1px solid #c3c3c3;
+}
+#instructions {
+    border:1px solid #c3c3c3;
+}
+</style>
+
+<div id="gameArea">
+    <div id="left-pane">
+        <canvas id="canvas" width="500" height="500">
+            Your browser does not support the HTML5 canvas tag.
+        </canvas>
+    </div>
+    <div id="right-pane">
+    	<div id="stats">
+    		<div id="name">ty</div>
+	        <div id="mousePosition">x:? y:?</div>
+	        <div id="Gold">Score: 0<br>500 gold<br>10 lives</div>
+        </div>
+        <div id="control">
+        	Buildings (damage per shot, range, frames between shots) <br>
+        	<input type="radio" name="towerSelect" value="1">20g: Wall (0,0,0)<br>
+        	<input type="radio" name="towerSelect" value="2">50g: Point Defense (70,3,30)<br>
+        	<input type="radio" name="towerSelect" value="3">100g: Mortar (45,4,150)<br>
+        	<input type="radio" name="towerSelect" value="4">75g: Freeze Tower (0,0,0)<br>
+        </div>
+        <div>
+            <button id="sendScore" type="button">Send Score</button> <br>
+            <button id="start" type="button">Start Wave 1</button>
+            <input type="checkbox" id="pauseOnLevel" checked=""> Pause after each wave <br>
+        </div>
+        <div id="message">You're doing great!</div>
+        
+        </div>
+    </div>
+
+<script type="text/javascript">
+"use strict";
+var mousePosition = document.getElementById('mousePosition');
+var pauseAfterWave= document.getElementById('pauseOnLevel');
+var message = document.getElementById('message');
+var resetButton = document.getElementById('reset');
+var scoreButton = document.getElementById('sendScore');
+var startButton = document.getElementById('start');
+var scoreBox = document.getElementById('scores');
+var canvas = document.getElementById('canvas');
+var goldDisplay = document.getElementById('Gold');
+var nameDisplay = document.getElementById('name');
+var turretSelectRadio = document.getElementsByName("towerSelect");
+var canvasWidth = canvas.width;
+var canvasHeight = canvas.height;
+var boardSize = canvasWidth;
+var ctx = canvas.getContext('2d');
+var playing=false;
+var largePrime=32452843;
+var randomSeed=largePrime;
+var turretType=0;
+var targetingCircle=false;
+var mousex=0;
+var mousey=0;
+
+var turrets=[];
+var creeps=[];
+var goldCosts=[0,20,50,100,75];
+var gold=500;
+var lives=10;
+var wave =1;
+var playerScore=0;
+
+
+var baseHP=130;
+var baseSpeed=.05;
+var baseSize=.004;
+var baseDelay=95;
+
+
+var creepsInWave=0;
+var creepHP=[1];
+var creepSpeed=[1];
+var creepSize=[1];
+var creepDelay=[1];
+
+function sRand(){
+	randomSeed+=1;
+	var x=Math.sin(randomSeed*Math.E)/2+1;
+	return x;
+}
+
+function arrEq(a,b,offset){
+	for (var i=0; i<a.length; i++) if (a[i]!=b[i+offset]) return false;
+	return true;
+}
+
+class creep {
+	constructor(hp, speed, girth, initx, inity){
+		this.x=initx+.5;
+		this.y=inity+.5;
+		this.girth=girth;
+		this.hp=hp;
+		this.maxhp=hp;
+		this.speed=speed;
+		this.path=path.slice(0);
+	}
+	die() {
+		playerScore+=1
+		gold+=5;
+		var tmp=creeps.indexOf(this);
+		if (tmp>=0) creeps.splice(tmp,1);
+	}
+	win() {
+		lives-=1;
+		gold-=5;
+		playerScore-=1;
+		this.die();
+	}
+	repath(){
+		var tmp=djikstra(Math.floor(this.x),Math.floor(this.y),endPosx,endPosy);
+		if (tmp.length==0){
+			console.log('built in');
+			this.win();
+		}
+		else if (!arrEq(this.path, tmp,1)) this.path=tmp;
+	}
+	near(){
+		var tmp=dist(this.x,this.y,dec(this.path[0])[0],dec(this.path[0])[1]);
+		//console.log("distance to ("+dec(this.path[0])[0]+","+dec(this.path[0])[1]+"): "+tmp);
+		return this.speed>dist(this.x-.5,this.y-.5,dec(this.path[0])[0],dec(this.path[0])[1]);
+	}
+	move(){
+		if(this.near()){this.path.shift();}
+		if (this.path.length==0){
+			this.win();
+		}
+		//console.log("current position: "+this.x+" "+this.y);
+		var dx=dec(this.path[0])[0]-this.x+.5;
+		var dy=dec(this.path[0])[1]-this.y+.5;
+		var dhyp=dist(dx,dy,0,0);
+		var slow=false;
+		for (var i=0; i<turrets.length; i++)
+		{
+			if (turrets[i].attackType==4 && dist(this.x,this.y,turrets[i].x+.5, turrets[i].y+.5)<=turrets[i].range) slow=true;
+		}
+		if (slow) dhyp*=2;
+		this.x+=this.speed*dx/dhyp;
+		this.y+=this.speed*dy/dhyp;
+	}
+	hit(dam){
+		this.hp-=dam;
+		if (this.hp<=0) this.die();
+	}
+	draw(){
+		ctx.beginPath();
+		ctx.arc(this.x*canvasWidth/gridSize,this.y*canvasHeight/gridSize, this.girth,0,2*Math.PI,false);
+		var g=Math.ceil(120*this.hp/this.maxhp);
+		ctx.fillStyle='hsl('+g+', 100%, 25%)';
+		ctx.fill();
+		ctx.lineWidth=2;
+		ctx.strokeStyle="#000000";
+		ctx.stroke();
+	}
+}
+
+class turret{
+	constructor(gx, gy, attackType){
+		this.x=gx;
+		this.y=gy;
+		this.cd=0;
+		this.attackType=attackType;
+		if (attackType==1)
+		{
+			this.range=0;
+			this.damage=0;
+			this.charge=0;
+		}
+		if (attackType==2)
+		{
+			this.range=3;
+			this.damage=70;
+			this.splash=0;
+			this.charge=30;
+			
+		}
+		if (attackType==3)
+		{
+			this.range=4;
+			this.damage=45;
+			this.splash=1.5;
+			this.charge=150;
+			
+		}
+		if (attackType==4)
+		{
+			this.range=2;
+			this.damage=0;
+			this.charge=0;
+			
+		}
+	}
+	shoot(){
+		if (this.damage>=0){
+			if (this.cd<=this.charge) this.cd+=1;
+			if (this.cd>=this.charge){
+				this.cd=0;
+				var minDist=Infinity;
+				var minion=-1;
+				var atx=-1;
+				var aty=-1;
+				for (var i=0; i< creeps.length; i++)
+				{
+					var tmp=dist(this.x+.5,this.y+.5, creeps[i].x,creeps[i].y);
+					if (tmp<minDist){
+						minDist=tmp;
+						minion=i;
+					}
+				}
+				if (minDist<=this.range){
+					atx=creeps[minion].x;
+					aty=creeps[minion].y;
+					if(this.splash<=0)
+						creeps[minion].hit(this.damage);
+					else{
+						for(var i=0; i<creeps.length; i++)
+						{
+							if (dist(creeps[i].x,creeps[i].y,creeps[minion].x,creeps[minion].y)<=this.splash) creeps[i].hit(this.damage);
+						}
+
+					}
+					drawLine(this.x+.5,this.y+.5,atx,aty,2,"red");
+				}
+
+			}
+		}
+	}
+
+
+}
+
+var gridColors=["#ffffff","#a0a0a0","#ab1919","#ffCD00","#00c0ff"];
+
+var gridSize=15;
+var startPosx=0;
+var startPosy=Math.floor(gridSize/2);
+var endPosx=gridSize-1;
+var endPosy=Math.floor(gridSize/2);
+
+var board = new Array(gridSize);
+for (var i=0; i<gridSize; i++){
+	board[i]=new Array(gridSize);
+	for (var j=0; j< gridSize; j++) board[i][j]=0;
+}
+var path= djikstra(startPosx,startPosy,endPosx,endPosy);
+
+function dist(x0,y0,x1,y1){
+	return Math.sqrt(Math.pow(x0-x1,2)+Math.pow(y0-y1,2));
+}
+
+function lineDist(x0,y0,x1,y1,x2,y2){
+	return Math.abs((y2-y1)*x0-(x2-x1)*y0+x2*y1-y2*x1)/dist(x1,y1,x2,y2);
+}
+
+function inArray(toCheck, arrayToCheck){
+	var i = arrayToCheck.length;
+	while (i--) if (tocheck==arrayToCheck[i]) return i;
+	return -1;
+}
+
+function findMin(unvisited, dists){
+	var cMin=Infinity;
+	var best=null;
+	for (var i=0; i<unvisited.length; i++){
+		if (unvisited[i] && cMin> dists[i]){
+			cMin= dists[i];
+			best=i;
+		}
+	}
+	return best;
+}
+
+function adjacent(node, unvisited){
+	var x=dec(node)[0];
+	var y=dec(node)[1];
+	var ret=[];
+	for (var dx=-1; dx<=1; dx+=2){
+		if(inBoard(x+dx,y) && unvisited[enc(x+dx,y)]) ret.push(enc(x+dx,y));
+		if(inBoard(x,y+dx) && unvisited[enc(x,y+dx)]) ret.push(enc(x,y+dx));
+	}
+
+	return ret;
+}
+
+function enc(x,y){
+	return gridSize*x+y;
+}
+function dec(k){
+	return [Math.floor(k/gridSize), k%gridSize];
+}
+function inBoard(x,y){
+	return ((x>=0) && (y>=0) && (x<gridSize) &&(y<gridSize));
+}
+
+
+
+function djikstra(startx, starty, endx, endy){
+	var dists=new Array(gridSize*gridSize);
+	var unvisited= new Array(gridSize*gridSize);
+	var prev=new Array(gridSize*gridSize);
+	for (var i=0; i<dists.length; i++){
+		dists[i]=Infinity;
+		if(board[dec(i)[0]][dec(i)[1]]==0) unvisited[i]=true;
+		else unvisited[i]=false;
+		prev[i]=-1;
+	}
+	dists[enc(startx,starty)]=0;
+	while(unvisited[enc(endx,endy)]==true){
+		var current=findMin(unvisited,dists);
+		unvisited[current]=false;
+		if (current==null){console.log('d fail');return []};
+		var adj=adjacent(current,unvisited);
+		for(var i=0; i<adj.length; i++){
+			if (dists[current]+1 < dists[adj[i]]){
+				dists[adj[i]]=dists[current]+1;
+				prev[adj[i]]=current;
+			}
+		}
+	}
+	var ret=[];
+	var current=enc(endx,endy);
+	ret.push(current);
+	while(prev[current]!=-1){
+		current=prev[current];
+		ret.push(current);
+	}
+	ret.reverse();
+	console.log(ret);
+	return ret;
+}
+
+function drawPath(path, color){
+	var halfW=canvasWidth/gridSize/2;
+	var halfH=canvasHeight/gridSize/2;
+	var tmpx=Math.floor(path[0]/gridSize)*canvasWidth/gridSize;
+	var tmpy=path[0]%gridSize*canvasHeight/gridSize;
+	for (var i=1; i<path.length; i++){
+		var x=Math.floor(path[i]/gridSize)*canvasWidth/gridSize;
+		var y=path[i]%gridSize*canvasHeight/gridSize;
+		drawLine(tmpx+halfW,tmpy+halfW,x+halfH,y+halfW,2,"#ff0000");
+		tmpx=x;
+		tmpy=y;
+	}
+}
+
+function drawLine(sx,sy,ex,ey, width, color){
+	ctx.beginPath();
+	ctx.moveTo(sx,sy);
+	ctx.lineTo(ex,ey);
+	ctx.lineWidth = width;
+	ctx.strokeStyle = color;
+	ctx.stroke();
+}
+
+function drawRect(x,y,color){
+	ctx.beginPath();
+	ctx.rect(x*canvasWidth/gridSize, y*canvasHeight/gridSize, canvasWidth/gridSize, canvasHeight/gridSize);
+	ctx.fillStyle=gridColors[color];
+	ctx.fill();
+	ctx.lineWidth=1;
+	ctx.strokeStyle="#c3c3c3";
+	ctx.stroke();
+}
+
+function getMousePosition(canvas, evt) {
+    var x = new Number();
+    var y = new Number();
+    if (evt.pageX != undefined && evt.pageY != undefined) {
+        x = evt.pageX;
+        y = evt.pageY;
+    } else {
+        x = evt.clientX + document.body.scrollLeft
+                + document.documentElement.scrollLeft;
+        y = evt.clientY + document.body.scrollTop
+                + document.documentElement.scrollTop;
+    }
+    x -= canvas.offsetLeft + 1;
+    y -= canvas.offsetTop + 1;
+    return {
+        x: x,
+        y: y
+    };
+}
+
+function drawBoard() {
+	clearBoard();
+	    
+	    
+		for (var i=0; i<gridSize; i++){
+		for (var j=0; j<gridSize; j++){
+			drawRect(i,j, board[i][j]);
+		}
+	}
+	drawPath(path);
+	for(var i=0; i<creeps.length; i++){
+	    	creeps[i].draw();
+	    }
+	 goldDisplay.innerHTML = "Score: "+playerScore+"<br>"+ gold+" gold<br>"+lives+" lives"
+	 if (targetingCircle){
+	 	ctx.beginPath();
+	 	var radii=[0,0,3,4,2]
+		ctx.arc(mousex,mousey, radii[turretType]/gridSize*canvasWidth,0,2*Math.PI,false);
+		ctx.lineWidth=1;
+		ctx.strokeStyle="#000000";
+		ctx.stroke();
+
+	 }
+
+}
+
+function clearBoard() {
+    ctx.fillStyle="#ffffff";
+    ctx.fillRect(0,0,canvasWidth,canvasHeight);
+}
+
+function resetBoard() {
+    ctx.fillStyle="#ffffff";
+    ctx.fillRect(0,0,canvasWidth,canvasHeight);
+    turrets=[];
+    creeps=[];
+    for (var i=0; i<gridSize; i++)for (var j=0; j< gridSize; j++) board[i][j]=0;
+    drawBoard();
+	gold=500;
+	playerScore=0;
+	lives=10;
+}
+
+function isValid(pos, newval){
+	var x=Math.floor(pos.x/canvasWidth*gridSize);
+	var y=Math.floor(pos.y/canvasHeight*gridSize);
+	var tmp=board[x][y];
+	board[x][y]=newval;
+	var ret = djikstra(startPosx,startPosy,endPosx,endPosy);
+	board[x][y]=tmp;
+	console.log(ret);
+	return ret;
+}
+
+function scoreWrap(){
+	postScore(playerScore,userName);
+}
+
+function postScore(ws, wr) {
+        if (!wr)
+        wr = "guest";
+        if (wr == "")
+        wr = "guest";
+        document.location.href="/drecco/index.php?task=Defense&winner="+wr+"&ws="+ws;
+}
+
+
+canvas.addEventListener('mousemove', function(evt) {
+    var mousePos = getMousePosition(canvas, evt);
+    if (mousePos.x > -1 && mousePos.y > -1) {
+        mousePosition.innerHTML = "x:" + mousePos.x + " y:" + mousePos.y;
+        mousex=mousePos.x;
+        mousey=mousePos.y;
+        targetingCircle=true;
+        for (var i=0, l=turretSelectRadio.length; i<l; i++) if (turretSelectRadio[i].checked) turretType=i+1;
+
+    }
+    drawBoard();
+}, false);
+
+canvas.addEventListener('mouseout', function(evt) {
+    mousePosition.innerHTML = "x:? y:?";
+    targetingCircle=false;
+}, false);
+
+canvas.addEventListener('click', function(evt) {
+    var mousePos = getMousePosition(canvas, evt);
+    for (var i=0, l=turretSelectRadio.length; i<l; i++) if (turretSelectRadio[i].checked) turretType=i+1;
+    if (gold>= goldCosts[turretType]){
+    	path=isValid(mousePos, turretType);
+    	if (path.length==0){
+    		path=djikstra(startPosx,startPosy,endPosx,endPosy);
+    		message.innerHTML="Blocking the path is not allowed";
+    	}
+    	else{
+    		gold-=goldCosts[turretType];
+    		turrets.push(new turret(Math.floor(gridSize*mousePos.x/canvasWidth),Math.floor(gridSize*mousePos.y/canvasHeight),turretType));
+    		board[Math.floor(gridSize*mousePos.x/canvasWidth)][Math.floor(gridSize*mousePos.y/canvasHeight)]=turretType;
+    		for(var i=0; i<creeps.length; i++){
+    			creeps[i].repath();
+    		}
+
+    	}
+    }
+    clearBoard();
+    drawBoard();
+    drawPath(path);
+}, false);
+
+function startWave(){
+	if (playing) return;
+	
+	wave+=1;
+	startButton.innerHTML="Start Wave "+wave;
+
+	var eHP=Math.ceil(baseHP*Math.pow(wave,sRand()/2+.8));
+
+	creepsInWave=Math.ceil(Math.pow(wave*sRand(),sRand()+.5));
+	creepHP=[Math.ceil(wave*eHP/creepsInWave/2)+50];
+	creepSpeed=[(sRand()/2+.3)*baseSpeed];
+	creepSize=[Math.min(baseSize*creepHP[0]/creepSpeed[0],15)];
+	creepDelay=[Math.max(baseDelay/Math.pow(wave,sRand()*2),creepSize[0]*4)];
+	console.log("Count "+creepsInWave+" HP "+creepHP+" speed "+creepSpeed+" size "+creepSize+" delay "+creepDelay);
+
+
+	playing=true;
+}
+
+
+
+//resetButton.addEventListener('click', resetBoard, false);
+scoreButton.addEventListener('click',scoreWrap,false);
+startButton.addEventListener('click',startWave,false);
+
+
+var userName=prompt("Please enter your name");
+nameDisplay.innerHTML=userName;
+
+drawBoard()
+drawPath(path);
+//creeps.push(new creep(100,.1/7,10,startPosx,startPosy));
+
+var creepIndex=0;
+var curDelay=0;
+
+function gameUpdate()
+{
+	if (playing && lives>0){
+		curDelay=(curDelay+1);
+		if (curDelay>creepDelay[creepIndex]) curDelay=0;
+		
+	    drawBoard();
+
+	    if (curDelay==0 && creepsInWave>0){
+	    	creeps.push(new creep(creepHP[creepIndex],creepSpeed[creepIndex],creepSize[creepIndex],startPosx,startPosy));
+	    	creepIndex=(creepIndex+1)%creepHP.length;
+	    	creepsInWave-=1;
+	    }
+	    if (creepsInWave<=0 && creeps.length==0){
+	    	playing=false;
+	    	if (!pauseAfterWave.checked) startWave();
+		}
+
+
+
+	    for(var i=0; i<creeps.length; i++){
+	    	creeps[i].move();
+	    }
+	    for(var i=0; i<turrets.length; i++){
+	    	turrets[i].shoot();
+	    }
+	}
+	if (lives<=0)
+		{ message.innerHTML="Game Over";
+		drawBoard();
+	}
+
+}
+
+var gameLoop = window.setInterval(gameUpdate, 20)
+
+</script>
+
+
+
+
+
+<div class="post" style="position:absolute; top:100%; height:10%">
+<h2 class="title">Last 10 scores</h2>
+
+		<table border="1" id="theScores" cellpadding="2"><tbody><tr><td><b>Date</b></td><td><b>Player Account</b></td><td><b>Player name</b></td><td><b>Score</b></td></tr><tr><td>2016-10-12 06:20:36</td><td>guest</td><td>Jack</td><td>23</td></tr><tr><td>2016-09-12 04:29:08</td><td>guest</td><td>yogg saron, the god of death</td><td>3741</td></tr><tr><td>2016-09-12 03:20:19</td><td>guest</td><td>me</td><td>321</td></tr><tr><td>2016-09-12 03:09:21</td><td>guest</td><td>yogg saron, the god of death</td><td>23</td></tr><tr><td>2016-09-12 03:05:01</td><td>guest</td><td>me</td><td>0</td></tr><tr><td>2016-07-23 12:24:38</td><td>guest</td><td>BUCKY</td><td>6957</td></tr><tr><td>2016-07-23 09:08:40</td><td>guest</td><td>BUCKY</td><td>15033</td></tr><tr><td>2016-06-12 02:04:54</td><td>guest</td><td>42</td><td>16</td></tr><tr><td>2016-06-12 01:58:04</td><td>guest</td><td>This is a really long name.</td><td>4</td></tr><tr><td>2016-05-31 01:47:30</td><td>guest</td><td>guest</td><td>0</td></tr></tbody></table></div>
+
+    
+    
+</body></html>
